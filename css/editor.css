@@ -1,6 +1,6 @@
 /* ============================================================
    MCCT — editor.css
-   叠加层编辑器：行号 + 高亮层 + 透明 textarea
+   叠加层编辑器：行号 + 高亮层 + 透明 textarea + 底部工具栏
    ============================================================ */
 
 /* ---------- 行号栏 ---------- */
@@ -52,7 +52,6 @@
   left: 0;
   width: 100%;
   height: 100%;
-  /* 三层对齐的关键属性，缺一不可 */
   font-family: var(--font-mono);
   font-size: var(--editor-font-size);
   line-height: var(--editor-line-height);
@@ -75,7 +74,6 @@
   color: var(--tok-value);
   background: transparent;
   overflow: auto;
-  /* 高亮层不显示自己的滚动条，用户只感知到 textarea 的滚动条 */
   scrollbar-width: none;
 }
 .layer-highlight::-webkit-scrollbar { display: none; }
@@ -100,13 +98,11 @@
   -webkit-text-fill-color: transparent;
 }
 
-/* 选择高亮 */
 .layer-input::selection {
   background: var(--selection);
   -webkit-text-fill-color: transparent;
 }
 
-/* 占位符 */
 .layer-input::placeholder {
   color: var(--text-muted);
   opacity: .5;
@@ -129,3 +125,91 @@
 .tok-error       { color: var(--tok-error); text-decoration: underline wavy var(--tok-error); }
 .tok-slash       { color: var(--tok-command); font-weight: 600; }
 .tok-literal     { color: var(--tok-keyword); }
+
+/* ============================================================
+   编辑器底部工具栏
+   ============================================================ */
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.toolbar-right {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.toolbar-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 按钮之间的竖直分隔线 */
+.toolbar-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: var(--border-default);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* 工具栏按钮：图标 + 文字 */
+.editor-toolbar .btn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+}
+
+.editor-toolbar .icon-sm {
+  width: 14px;
+  height: 14px;
+}
+
+/* 复制成功状态 */
+.editor-toolbar .btn-text.is-success {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+/* 窄屏：隐藏提示文字，只留图标按钮 */
+@media (max-width: 700px) {
+  .toolbar-hint { display: none; }
+
+  .editor-toolbar .btn-text-label {
+    /* 移动端隐藏按钮文字，只留图标，节省空间 */
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .editor-toolbar .btn-text {
+    padding: 6px 8px;
+  }
+}
