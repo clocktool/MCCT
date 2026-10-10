@@ -65,10 +65,47 @@
   gap: 2px;
   padding: 0 8px 6px;
   overflow-x: auto;
+  overflow-y: hidden;
   flex-shrink: 0;
-  scrollbar-width: none;
+  /* 保留可见滚动条，让用户知道可以横滑 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  /* 边缘渐隐提示：右侧 16px 内会逐渐透明，暗示"还有内容" */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 4px,
+    black calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 4px,
+    black calc(100% - 16px),
+    transparent 100%
+  );
 }
-.sidebar-tabs::-webkit-scrollbar { display: none; }
+
+/* 细滚动条（Webkit） */
+.sidebar-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+.sidebar-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-tabs::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 2px;
+}
+.sidebar-tabs::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* 标签禁止换行，否则会撑破高度 */
+.sidebar-tabs .tab {
+  flex-shrink: 0;
+}
 
 .tab {
   padding: 5px 10px;
