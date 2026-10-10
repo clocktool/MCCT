@@ -1,0 +1,202 @@
+/* ============================================================
+   MCCT — layout.css
+   应用骨架布局：header / body（editor + sidebar）/ statusbar
+   ============================================================ */
+
+/* ---------- 应用根 ---------- */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* ---------- 顶部工具栏 ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-h);
+  min-height: var(--header-h);
+  padding: 0 12px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 30;
+}
+
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-logo {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.app-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- 主体：编辑器 + 侧边栏 ---------- */
+.app-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;              /* 关键：允许子元素在 flex 中收缩 */
+  overflow: hidden;
+}
+
+.editor-area {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 编辑器 wrapper：行号 + 滚动区 */
+.editor-wrapper {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--editor-bg);
+}
+
+/* ---------- 侧边栏 ---------- */
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  min-width: 200px;
+  max-width: 520px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
+  overflow: hidden;
+  transition: width .15s ease;
+}
+
+/* 折叠状态 */
+.sidebar.is-collapsed {
+  width: 0 !important;
+  min-width: 0;
+  border-left: none;
+}
+
+.sidebar.is-collapsed .sidebar-header,
+.sidebar.is-collapsed .sidebar-tabs,
+.sidebar.is-collapsed .sidebar-search,
+.sidebar.is-collapsed .id-list,
+.sidebar.is-collapsed .sidebar-resizer {
+  display: none;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+}
+
+/* 侧边栏拖拽把手 */
+.sidebar-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+  transition: background .15s;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer.is-dragging {
+  background: var(--accent);
+}
+
+/* ---------- 状态栏 ---------- */
+.app-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--statusbar-h);
+  min-height: var(--statusbar-h);
+  padding: 0 12px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  z-index: 30;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-sep { opacity: .4; }
+
+/* ---------- 响应式：窄屏切上下布局 ---------- */
+@media (max-width: 700px) {
+  .app-body {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    max-width: none;
+    min-width: 0;
+    height: 40vh;
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+    order: 2;                  /* 侧边栏放到编辑器下方 */
+  }
+
+  .sidebar.is-collapsed {
+    height: 0 !important;
+    border-top: none;
+  }
+
+  .editor-area {
+    order: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .sidebar-resizer {
+    display: none;             /* 移动端不拖拽宽度，改为拖拽高度 */
+  }
+
+  .app-subtitle { display: none; }
+}
