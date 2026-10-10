@@ -14,6 +14,32 @@
 </head>
 <body>
 
+  <!-- ===== 内联 SVG 图标库（无外部依赖） ===== -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" focusable="false">
+    <!-- 太阳（亮色主题） -->
+    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+    </symbol>
+    <!-- 月亮（暗色主题） -->
+    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </symbol>
+    <!-- 侧栏 -->
+    <symbol id="icon-sidebar" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <line x1="9" y1="4" x2="9" y2="20"/>
+    </symbol>
+    <!-- 关闭 -->
+    <symbol id="icon-close" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12"/>
+    </symbol>
+  </svg>
+
   <!-- ===== 应用根容器 ===== -->
   <div id="app" class="app">
 
@@ -25,11 +51,11 @@
       </div>
       <div class="header-right">
         <button class="btn-icon" id="btn-theme" title="切换主题" aria-label="切换主题">
-          <span class="icon-sun">☀</span>
-          <span class="icon-moon">☾</span>
+          <svg class="icon icon-sun" aria-hidden="true"><use href="#icon-sun"/></svg>
+          <svg class="icon icon-moon" aria-hidden="true"><use href="#icon-moon"/></svg>
         </button>
         <button class="btn-icon" id="btn-toggle-sidebar" title="折叠/展开 ID 表" aria-label="折叠或展开 ID 表">
-          <span class="icon-sidebar">◧</span>
+          <svg class="icon" aria-hidden="true"><use href="#icon-sidebar"/></svg>
         </button>
       </div>
     </header>
@@ -73,7 +99,9 @@
       <aside class="sidebar" id="sidebar" aria-label="ID 表浏览器">
         <div class="sidebar-header">
           <h2 class="sidebar-title">ID 表</h2>
-          <button class="btn-icon btn-close-sidebar" id="btn-close-sidebar" title="关闭" aria-label="关闭 ID 表">✕</button>
+          <button class="btn-icon btn-close-sidebar" id="btn-close-sidebar" title="关闭" aria-label="关闭 ID 表">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg>
+          </button>
         </div>
 
         <!-- 分类标签 -->
