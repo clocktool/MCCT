@@ -1,0 +1,247 @@
+/* ============================================================
+   MCCT — components.css
+   按钮 / 下拉补全框 / ID 表浏览器 / 状态栏组件
+   ============================================================ */
+
+/* ---------- 图标按钮 ---------- */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  color: var(--text-secondary);
+  transition: background .12s, color .12s;
+}
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.btn-icon:active {
+  background: var(--bg-active);
+}
+
+/* 主题切换按钮：根据当前主题显示对应图标 */
+[data-theme="dark"] .icon-sun  { display: none; }
+[data-theme="light"] .icon-moon { display: none; }
+
+/* ---------- 文本按钮 ---------- */
+.btn-text {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.btn-text:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+/* ---------- ID 表侧边栏：分类标签 ---------- */
+.sidebar-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+.sidebar-tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.tab.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- ID 表搜索框 ---------- */
+.sidebar-search {
+  padding: 0 12px 8px;
+  flex-shrink: 0;
+}
+
+.search-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+.search-input::placeholder { color: var(--text-muted); }
+.search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+/* ---------- ID 列表 ---------- */
+.id-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 6px 8px;
+  min-height: 0;
+}
+
+.id-list-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.id-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .1s;
+}
+.id-item:hover { background: var(--bg-hover); }
+.id-item:active { background: var(--bg-active); }
+
+.id-item-key {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tok-id);
+  word-break: break-all;
+}
+
+.id-item-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+/* 无中文名时只显示 ID，隐藏标签行 */
+.id-item-label:empty { display: none; }
+
+/* ---------- 下拉补全框 ---------- */
+.dropdown {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  max-width: 420px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--dropdown-shadow);
+  padding: 4px;
+  font-size: 13px;
+  display: none;              /* 默认隐藏，由 JS 切换 */
+}
+
+.dropdown.is-visible { display: block; }
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .08s;
+}
+.dropdown-item:hover,
+.dropdown-item.is-selected {
+  background: var(--dropdown-hover);
+}
+.dropdown-item.is-selected {
+  background: var(--dropdown-selected);
+}
+
+/* 补全项图标（用文本符号，不依赖外部字体） */
+.dropdown-icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  font-size: 13px;
+  opacity: .8;
+}
+
+.dropdown-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+/* 高亮匹配前缀 */
+.dropdown-label .match {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dropdown-hint {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 分组标题 */
+.dropdown-group {
+  padding: 5px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+}
+
+/* 空状态 */
+.dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 状态栏辅助类 ---------- */
+.status-error {
+  color: var(--color-error);
+}
+.status-error.hidden { display: none; }
+
+/* ---------- 移动端微调 ---------- */
+@media (max-width: 700px) {
+  .dropdown {
+    max-height: 200px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .sidebar-tabs {
+    padding: 0 6px 4px;
+  }
+
+  .tab {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
