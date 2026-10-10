@@ -220,3 +220,20 @@ a { color: var(--accent); text-decoration: none; }
   transition: none !important;
   animation-duration: 0s !important;
 }
+
+/* ---------- 6. 交互元素默认过渡兜底 ---------- */
+/* 只对 button / input / a / [role] 这类真正的交互元素生效，
+   避免给布局容器加上无意义的过渡。 */
+button,
+input,
+textarea,
+select,
+a,
+[role="button"],
+[role="tab"],
+[role="option"] {
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
