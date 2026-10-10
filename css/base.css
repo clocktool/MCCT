@@ -125,6 +125,10 @@ a { color: var(--accent); text-decoration: none; }
   --sidebar-w: 300px;
   --editor-font-size: 14px;
   --editor-line-height: 1.6;
+
+  /* 交互动画时长（统一来源） */
+  --transition-fast: 120ms;
+  --transition-base: 180ms;
 }
 
 /* ---------- 3. 亮色主题 ---------- */
