@@ -24,11 +24,14 @@ body {
     "Segoe UI", "PingFang SC", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
-  overflow: hidden;              /* 单页应用，禁止页面级滚动 */
+  overflow: hidden;
   height: 100dvh;
   background: var(--bg-app);
   color: var(--text-primary);
-  transition: background-color .2s ease, color .2s ease;
+  /* 注意：这里不再为 body 单独设置过渡。
+     原因：主题切换时如果只有 body 在渐变、其他控件突变，
+     视觉上会出现「半屏先变、半屏后变」的不同步感。
+     全局过渡策略由 .theme-switching 统一控制。 */
 }
 
 /* 等宽字体栈 —— 编辑器和 ID 列表共用 */
@@ -198,3 +201,18 @@ a { color: var(--accent); text-decoration: none; }
   border-radius: 4px;
 }
 *::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ---------- 5. 主题切换期间的过渡抑制 ---------- */
+/*
+   应用主题时，main.js 会在 <html> 上临时挂 .theme-switching，
+   用它把所有元素的 transition 全部关闭，让整个 UI 在下一帧
+   瞬间、同步地完成变色。悬停等交互过渡不受影响，因为抑制类
+   在下一帧就会被移除。
+*/
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
