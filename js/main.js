@@ -190,7 +190,21 @@
       e.preventDefault();
       // 第 5 批会在这里接入补全的 Tab 确认逻辑
     }
-  });
+  /* ---------- 标签栏滚轮横滑 ---------- */
+  (function initTabsHorizontalScroll() {
+    const tabs = document.getElementById('sidebar-tabs');
+    if (!tabs) return;
+
+    tabs.addEventListener('wheel', function (e) {
+      // 只处理纵向滚轮（deltaY），把它转成横向滚动
+      // 触控板横向滑动（deltaX）浏览器原生支持，直接放行
+      if (e.deltaX !== 0) return;
+      if (e.deltaY === 0) return;
+
+      e.preventDefault();
+      tabs.scrollLeft += e.deltaY;
+    }, { passive: false });
+  })();
 
   /* ============================================================
      七、初始化
