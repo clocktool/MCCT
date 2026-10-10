@@ -11,7 +11,6 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
-  font-size: 16px;
   color: var(--text-secondary);
   transition: background .12s, color .12s;
 }
@@ -21,6 +20,21 @@
 }
 .btn-icon:active {
   background: var(--bg-active);
+}
+
+/* ---------- SVG 图标 ---------- */
+.icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  /* 让 <use> 引用的 symbol 继承 currentColor */
+  fill: none;
+  stroke: currentColor;
+}
+.icon use {
+  /* 部分浏览器需要显式声明才能继承颜色 */
+  pointer-events: none;
 }
 
 /* 主题切换按钮：根据当前主题显示对应图标 */
