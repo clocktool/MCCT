@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="MCCT — Minecraft 基岩版命令工具">
+  <title>MCCT — Minecraft 基岩版命令工具</title>
+
+  <!-- 样式：按依赖顺序引入 -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/editor.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <!-- ===== 应用根容器 ===== -->
+  <div id="app" class="app">
+
+    <!-- ===== 顶部工具栏 ===== -->
+    <header class="app-header" id="app-header">
+      <div class="header-left">
+        <h1 class="app-logo">MCCT</h1>
+        <span class="app-subtitle">Minecraft 基岩版命令工具</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="btn-theme" title="切换主题" aria-label="切换主题">
+          <span class="icon-sun">☀</span>
+          <span class="icon-moon">☾</span>
+        </button>
+        <button class="btn-icon" id="btn-toggle-sidebar" title="折叠/展开 ID 表" aria-label="折叠或展开 ID 表">
+          <span class="icon-sidebar">◧</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===== 主体区域：编辑器 + 侧边栏 ===== -->
+    <div class="app-body" id="app-body">
+
+      <!-- 编辑器区域 -->
+      <main class="editor-area" id="editor-area">
+        <div class="editor-wrapper" id="editor-wrapper">
+          <!-- 行号栏 -->
+          <div class="gutter" id="gutter" aria-hidden="true"></div>
+          <!-- 滚动容器：高亮层 + 输入层叠加 -->
+          <div class="scroller" id="scroller">
+            <!-- 高亮渲染层（只读，不接收事件） -->
+            <pre class="layer layer-highlight" id="highlight-layer"><code id="highlight-code"></code></pre>
+            <!-- 输入层（透明文字，保留光标与选择） -->
+            <textarea
+              class="layer layer-input"
+              id="editor-input"
+              spellcheck="false"
+              autocapitalize="off"
+              autocorrect="off"
+              wrap="off"
+              aria-label="命令编辑器"
+              placeholder="/execute as @a at @s run setblock ~ ~1 ~ minecraft:stone"
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- 编辑器底部快捷栏 -->
+        <div class="editor-toolbar" id="editor-toolbar">
+          <button class="btn-text" data-insert="/">插入 /</button>
+          <button class="btn-text" data-insert="@a">@a</button>
+          <button class="btn-text" data-insert="@e[type=">@e[type=</button>
+          <button class="btn-text" data-insert="~ ~ ~">~ ~ ~</button>
+        </div>
+      </main>
+
+      <!-- ID 表侧边栏 -->
+      <aside class="sidebar" id="sidebar" aria-label="ID 表浏览器">
+        <div class="sidebar-header">
+          <h2 class="sidebar-title">ID 表</h2>
+          <button class="btn-icon btn-close-sidebar" id="btn-close-sidebar" title="关闭" aria-label="关闭 ID 表">✕</button>
+        </div>
+
+        <!-- 分类标签 -->
+        <div class="sidebar-tabs" id="sidebar-tabs" role="tablist">
+          <button class="tab is-active" data-category="block" role="tab" aria-selected="true">方块</button>
+          <button class="tab" data-category="item" role="tab" aria-selected="false">物品</button>
+          <button class="tab" data-category="entity" role="tab" aria-selected="false">实体</button>
+          <button class="tab" data-category="effect" role="tab" aria-selected="false">效果</button>
+          <button class="tab" data-category="enchant" role="tab" aria-selected="false">魔咒</button>
+          <button class="tab" data-category="animation" role="tab" aria-selected="false">动画</button>
+          <button class="tab" data-category="sound" role="tab" aria-selected="false">声音</button>
+        </div>
+
+        <!-- 搜索框 -->
+        <div class="sidebar-search">
+          <input type="search" id="id-search" class="search-input" placeholder="搜索 ID 或中文名…" aria-label="搜索 ID">
+        </div>
+
+        <!-- 结果列表 -->
+        <ul class="id-list" id="id-list" role="listbox" aria-label="ID 列表">
+          <!-- 由 JS 填充 -->
+          <li class="id-list-empty">选择分类后加载数据…</li>
+        </ul>
+
+        <!-- 拖拽调整宽度的把手 -->
+        <div class="sidebar-resizer" id="sidebar-resizer" aria-hidden="true"></div>
+      </aside>
+
+    </div>
+
+    <!-- ===== 状态栏 ===== -->
+    <footer class="app-statusbar" id="app-statusbar">
+      <div class="status-left">
+        <span class="status-item" id="status-version">适配基岩版 1.26.60.30</span>
+        <span class="status-sep">|</span>
+        <span class="status-item" id="status-mode">原版</span>
+      </div>
+      <div class="status-right">
+        <span class="status-item status-error hidden" id="status-error">0 个错误</span>
+        <span class="status-item" id="status-caret">行 1, 列 1</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ===== 脚本：按依赖顺序引入 ===== -->
+  <script src="js/core/bus.js"></script>
+  <script src="js/data/commands.js"></script>
+  <script src="js/data/loader.js"></script>
+  <script src="js/core/tokenizer.js"></script>
+  <script src="js/core/parser.js"></script>
+  <script src="js/core/highlighter.js"></script>
+  <script src="js/core/completer.js"></script>
+  <script src="js/ui/editor.js"></script>
+  <script src="js/ui/dropdown.js"></script>
+  <script src="js/ui/idbrowser.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
