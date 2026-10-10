@@ -125,7 +125,12 @@
      ============================================================ */
 
   function toggleSidebar() {
-    sidebar.classList.toggle('is-collapsed');
+    const collapsed = sidebar.classList.toggle('is-collapsed');
+    if (collapsed) {
+      // 清掉拖拽调整宽度时留下的内联样式，
+      // 否则内联 width 会覆盖 .is-collapsed 的 width: 0
+      sidebar.style.width = '';
+    }
   }
   btnToggleSidebar.addEventListener('click', toggleSidebar);
   if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', toggleSidebar);
