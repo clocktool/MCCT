@@ -1,0 +1,200 @@
+/* ============================================================
+   MCCT — base.css
+   CSS Reset + 设计令牌（主题变量）
+   ============================================================ */
+
+/* ---------- 1. 全局重置 ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  overflow: hidden;              /* 单页应用，禁止页面级滚动 */
+  height: 100dvh;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  transition: background-color .2s ease, color .2s ease;
+}
+
+/* 等宽字体栈 —— 编辑器和 ID 列表共用 */
+:root {
+  --font-mono:
+    "Cascadia Code", "JetBrains Mono", "Fira Code",
+    "SF Mono", "Consolas", "Liberation Mono", Menlo,
+    "Courier New", monospace, "PingFang SC", "Microsoft YaHei";
+}
+
+img, svg { display: block; max-width: 100%; }
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; border: none; background: none; }
+
+ul, ol { list-style: none; }
+
+a { color: var(--accent); text-decoration: none; }
+
+/* ---------- 2. 暗色主题（默认） ---------- */
+:root,
+[data-theme="dark"] {
+  /* 背景层级 */
+  --bg-app:          #0f1117;
+  --bg-surface:      #161922;
+  --bg-elevated:     #1c202c;
+  --bg-hover:        #242938;
+  --bg-active:       #2c3246;
+
+  /* 文字 */
+  --text-primary:    #e2e6f0;
+  --text-secondary:  #8b93a7;
+  --text-muted:      #5a6175;
+  --text-inverse:    #0f1117;
+
+  /* 边框 */
+  --border-subtle:   #232838;
+  --border-default:  #2e3447;
+  --border-strong:   #3d4560;
+
+  /* 强调色 */
+  --accent:          #5b8def;
+  --accent-hover:    #7aa3f5;
+  --accent-muted:    rgba(91, 141, 239, .15);
+
+  /* 语义色 */
+  --color-error:     #f07178;
+  --color-warn:      #e6b450;
+  --color-success:   #7fd962;
+
+  /* 编辑器专用 */
+  --editor-bg:       #0d1017;
+  --editor-gutter:   #1a1e28;
+  --editor-gutter-text: #3d4560;
+  --editor-gutter-active: #8b93a7;
+  --caret:           #5b8def;
+  --selection:       rgba(91, 141, 239, .25);
+
+  /* 语法高亮令牌颜色（暗色） */
+  --tok-command:     #c792ea;   /* 命令名 — 紫 */
+  --tok-keyword:     #f78c6c;   /* if/unless/run/as/at — 橙 */
+  --tok-selector:    #7fd962;   /* @a @e — 绿 */
+  --tok-coordinate:  #89ddff;   /* ~ ~1 ~ — 青 */
+  --tok-number:      #f78c6c;   /* 数字 — 橙 */
+  --tok-string:      #ecc48d;   /* 字符串 — 金 */
+  --tok-json:        #c3e88d;   /* JSON/NBT — 黄绿 */
+  --tok-comment:     #5a6175;   /* 注释 — 灰 */
+  --tok-formatcode:  #c792ea;   /* §a — 紫 */
+  --tok-emoji:       #f07178;   /* :heart: — 红 */
+  --tok-id:          #82aaff;   /* minecraft:stone — 蓝 */
+  --tok-value:       #e2e6f0;   /* 普通值 */
+  --tok-error:       #f07178;
+
+  /* 组件 */
+  --dropdown-bg:     #1c202c;
+  --dropdown-border: #3d4560;
+  --dropdown-hover:  #2c3246;
+  --dropdown-selected: #3a4260;
+  --dropdown-shadow: 0 8px 32px rgba(0,0,0,.5);
+
+  /* 尺寸令牌 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --header-h: 44px;
+  --statusbar-h: 26px;
+  --sidebar-w: 300px;
+  --editor-font-size: 14px;
+  --editor-line-height: 1.6;
+}
+
+/* ---------- 3. 亮色主题 ---------- */
+[data-theme="light"] {
+  --bg-app:          #f5f6fa;
+  --bg-surface:      #ffffff;
+  --bg-elevated:     #ffffff;
+  --bg-hover:        #eef0f6;
+  --bg-active:       #e2e6f0;
+
+  --text-primary:    #1a1d27;
+  --text-secondary:  #5a6175;
+  --text-muted:      #8b93a7;
+  --text-inverse:    #ffffff;
+
+  --border-subtle:   #e2e6f0;
+  --border-default:  #d0d5e0;
+  --border-strong:   #b0b8c8;
+
+  --accent:          #3b6fd4;
+  --accent-hover:    #2d5bb8;
+  --accent-muted:    rgba(59, 111, 212, .1);
+
+  --color-error:     #d73a49;
+  --color-warn:      #b08800;
+  --color-success:   #28a745;
+
+  --editor-bg:       #ffffff;
+  --editor-gutter:   #f0f2f7;
+  --editor-gutter-text: #b0b8c8;
+  --editor-gutter-active: #5a6175;
+  --caret:           #3b6fd4;
+  --selection:       rgba(59, 111, 212, .2);
+
+  --tok-command:     #7c3aed;
+  --tok-keyword:     #d97706;
+  --tok-selector:    #16a34a;
+  --tok-coordinate:  #0891b2;
+  --tok-number:      #d97706;
+  --tok-string:      #b45309;
+  --tok-json:        #65a30d;
+  --tok-comment:     #9ca3af;
+  --tok-formatcode:  #7c3aed;
+  --tok-emoji:       #dc2626;
+  --tok-id:          #2563eb;
+  --tok-value:       #1a1d27;
+  --tok-error:       #d73a49;
+
+  --dropdown-bg:     #ffffff;
+  --dropdown-border: #d0d5e0;
+  --dropdown-hover:  #eef0f6;
+  --dropdown-selected: #dbeafe;
+  --dropdown-shadow: 0 8px 32px rgba(0,0,0,.12);
+}
+
+/* ---------- 4. 工具类 ---------- */
+.hidden { display: none !important; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 自定义滚动条（暗色 + 亮色通用） */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
