@@ -91,22 +91,30 @@
   background: var(--bg-surface);
   border-left: 1px solid var(--border-subtle);
   overflow: hidden;
-  transition: width .15s ease;
+  /* 宽度 + 边框一起过渡，避免收起时边框突然消失造成跳变 */
+  transition:
+    width var(--transition-base) ease,
+    min-width var(--transition-base) ease,
+    border-left-width var(--transition-base) ease,
+    border-left-color var(--transition-base) ease;
+}
+
+/* 侧边栏内部内容统一淡入淡出 */
+.sidebar > *:not(.sidebar-resizer) {
+  transition: opacity var(--transition-base) ease;
 }
 
 /* 折叠状态 */
 .sidebar.is-collapsed {
-  width: 0 !important;
+  width: 0;
   min-width: 0;
-  border-left: none;
+  border-left-color: transparent;
 }
 
-.sidebar.is-collapsed .sidebar-header,
-.sidebar.is-collapsed .sidebar-tabs,
-.sidebar.is-collapsed .sidebar-search,
-.sidebar.is-collapsed .id-list,
-.sidebar.is-collapsed .sidebar-resizer {
-  display: none;
+/* 收起时内容立即淡出（因为宽度已经在变窄，不能等） */
+.sidebar.is-collapsed > *:not(.sidebar-resizer) {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .sidebar-header {
