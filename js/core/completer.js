@@ -401,7 +401,6 @@
   function completeSelectorValue(ctx, partial) {
     const key = ctx.expecting && ctx.expecting.key;
     if (!key) return [];
-    // 按 key 的类型走
     const sel = getSelector();
     const kDef = sel && sel.keyMap ? sel.keyMap[key] : null;
     if (!kDef) return [];
@@ -409,17 +408,31 @@
     switch (kDef.type) {
       case 'entityType':
         return completeFromIDTable('entity', partial);
+
+      case 'entityFamily':
+        // ← 新增：从 loader 读 entityFamily 表
+        return completeFromIDTable('entityFamily', partial);
+
+      case 'bool':
+        return completeBool(partial);
+
+      case 'enum':
+        // location= 之类
+        if (Array.isArray(kDef.options)) {
+          return filterAndRank(kDef.options.map(makeItemFromEnum), partial);
+        }
+        return [];
+
       case 'coordinate':
       case 'number':
       case 'int':
-        // 坐标/数字不给候选项（或给一些常用值）
-        return [];
-      case 'json':
-        return [];
       case 'string':
-        // name / tag / family，无固定候选
-        return [];
+      case 'scores':
+      case 'hasitem':
+      case 'haspermission':
+      case 'has_property':
       default:
+        // 自由输入 / 嵌套结构，交给下拉列表内的"段内补全"处理
         return [];
     }
   }
