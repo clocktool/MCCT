@@ -1,7 +1,7 @@
 /* ============================================================
    MCCT — core/highlighter.js
    语法高亮渲染器。把 tokenizer 输出的 token 数组渲染成 HTML 片段，
-   写入高亮层（<pre><code id="highlight-code">）。
+   写入高亮层（<pre><code id="highlight-code">）
 
    设计约束（对齐 editor.css 与 MCC 第二章 token 分类）：
      1. 绝不操作 DOM 之外的任何东西。只返回 HTML 字符串，
