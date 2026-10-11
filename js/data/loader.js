@@ -2,8 +2,8 @@
    MCCT — data/loader.js  （适配版 · Batch 2.5）
 
    职责：
-     把 MCBEID 表的 .txt 解析成统一结构，供 ID 浏览器使用。
-     不负责命令定义（那在 commands.js 里）。
+     把 MCBEID 表的 .txt 解析成统一结构，供 ID 浏览器使用
+     不负责命令定义（那在 commands.js 里）
 
    数据来源优先级：
      1. window.MCCT_DATA_INLINE[category]
