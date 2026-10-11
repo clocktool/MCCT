@@ -1,94 +1,114 @@
 /* ============================================================
-   MCCT — core/parser.js
-   语法解析器。在 tokenizer 输出的 token 流上跑一个状态机，
-   推断「光标当前位置期待什么」，供 completer 使用。
+   MCCT — core/parser.js  （修订版 · 支持嵌套选择器参数）
 
-   本模块不碰 DOM，不读 textarea，全部输入来自参数。
+   本次修订：
+     1. findSelectorContext 增加 nestedPath 返回
+        —— 识别 @a[hasitem={...}] 里的嵌套大括号
+     2. 新增 analyzeNestedPosition
+        —— 判断光标在嵌套大括号内的位置（key / value）
+     3. 输出结构新增字段：
+          nestedPath   ['hasitem']  或 ['scores']  或 null
+          nestedPhase  'key' | 'value' | null
+          nestedKeys   已输入的嵌套键列表
+          nestedKey    当前正在填的嵌套键名
+     4. 保留原有所有行为（不破坏 completer 之前的调用）
 
-   输出（统一结构）：
+   输出结构（完整）：
      {
-       kind,         // 'command' | 'arg' | 'selector' | 'selectorKey'
-                     // | 'selectorValue' | 'json' | 'none'
-       expecting,    // null 或 { types: [...], source: 'block' | ... }
-                     //   types 是建议的补全类型集合
-                     //   source 对应 loader 的 category 或内置枚举名
-       commandName,  // 'execute' | 'setblock' | ...  或 null
-       paramIndex,   // 当前是第几个参数（0-based，从命令名后开始数）
-       chainIndex,   // 若是 execute 链，当前处于第几个子命令（-1 表示不在 execute）
-       partial,      // 已输入的前缀（与 cursor 紧邻的词片段）
-       tokens,       // tokenizer 的完整输出
-       cursor,       // 当前光标 offset
-       wordStart,    // 当前词的起始 offset
-       wordEnd,      // 当前词的结束 offset
-       inSelector,   // 光标是否位于选择器内部（@a[...] 里）
-       selectorKeys, // 若 inSelector，已解析出的 key 列表
-       errors        // 发现的语法错误（暂未使用，占位）
-     }
+       kind,           // 'command' | 'keyword' | 'arg'
+                       // | 'selectorKey' | 'selectorValue'
+                       // | 'selectorNestedKey' | 'selectorNestedValue'
+                       // | 'none'
+       expecting,      // null 或 { types, source, ... }
+       commandName,    // 'setblock' | ...
+       paramIndex,     // 参数下标（0-based，从命令名后开始）
+       chainIndex,     // execute 链下标，-1 表示不在 execute
+       partial,        // 光标前紧邻的词前缀
+       tokens,         // tokenizer 完整输出
+       cursor,
+       wordStart,
+       wordEnd,
+       inSelector,     // 是否位于 @x[...] 内
+       selectorKeys,   // 选择器内已输入的 key 列表
 
-   设计哲学：
-     - 容错优先。用户可能只输入了一半，parser 不能抛异常，
-       必须给出「基于现有信息的最合理猜测」。
-     - 保守优先。拿不准时，expecting 返回 null 而不是瞎猜。
-     - 不做类型校验（值是否合法由 loader 或游戏决定）。
+       // —— 新增 ——
+       nestedPath,     // ['hasitem'] 或 ['scores'] 或 null
+       nestedPhase,    // 'key' | 'value' | null
+       nestedKeys,     // 嵌套内已输入的键列表
+       nestedKey,      // 当前正在填值的嵌套键名（nestedPhase='value' 时有效）
+
+       errors          // 预留
+     }
    ============================================================ */
 (function (global) {
   'use strict';
 
-  /* ============================================================
-     工具
-     ============================================================ */
-
-  function getCommands() {
-    return (global.MCCT && global.MCCT.commands) || null;
-  }
-
-  function getTokenizer() {
-    return (global.MCCT && global.MCCT.tokenizer) || null;
-  }
+  function getCommands()  { return (global.MCCT && global.MCCT.commands)  || null; }
+  function getTokenizer() { return (global.MCCT && global.MCCT.tokenizer) || null; }
+  function getSelector()  { return (global.MCCT && global.MCCT.selector)  || null; }
 
   /* ============================================================
-     上下文分类：判断光标所在位置
+     一、找光标所在的选择器（返回更丰富信息）
      ============================================================ */
 
   /**
-   * 判断光标是否位于一个 `@x[...]` 的方括号内部。
-   * @param {string} text
-   * @param {number} cursor
-   * @returns {null | { start: number, end: number }}
-   *   命中则返回选择器内部的字符区间（不含方括号），否则 null。
+   * 从 cursor 往前找最近未闭合的 '@'，确定光标是否在某个选择器内部。
+   *
+   * 返回值：
+   *   null
+   *   {
+   *     selStart,    // '@' 的下标
+   *     bracketStart,// '[' 的下标
+   *     bracketEnd,  // 匹配的 ']' 的下标
+   *     inner        // bracketStart+1 到 bracketEnd 之间的文本
+   *   }
+   *
+   * 算法：从 cursor 向前扫描，维护一个 "未闭合括号深度" 栈。
+   * 遇到 ']' 深度+1；遇到 '[' 深度-1。
+   * 深度归零时若左侧紧邻一个 '@x' 则是选择器起始。
    */
   function findSelectorContext(text, cursor) {
-    // 从 cursor 往前找最近的 '@'
+    const n = text.length;
     let i = cursor - 1;
     let depth = 0;
+    let inQuote = null;
+
     while (i >= 0) {
       const c = text.charAt(i);
-      if (c === ']') depth++;
-      else if (c === '[') {
+
+      // 反向扫描时字符串的引号处理：向前找成对引号不易，简化处理
+      // 只在正斜杠前遇到未转义引号时切换状态
+      if (c === '"' || c === '\'') {
+        // 反向数一下连续的反斜杠
+        let bsCount = 0, j = i - 1;
+        while (j >= 0 && text.charAt(j) === '\\') { bsCount++; j--; }
+        if (bsCount % 2 === 0) {
+          if (inQuote === null) inQuote = c;
+          else if (inQuote === c) inQuote = null;
+        }
+        i--;
+        continue;
+      }
+
+      if (inQuote !== null) { i--; continue; }
+
+      if (c === ']') {
+        depth++;
+      } else if (c === '[') {
         if (depth === 0) {
-          // 检查 '[' 前面是不是 @x
-          let j = i - 1;
-          while (j >= 0 && /[a-z_]/i.test(text.charAt(j))) j--;
-          if (j >= 0 && text.charAt(j) === '@') {
-            // 找到选择器起始
-            // 找匹配的 ']'
-            let k = i + 1, d = 1, inQ = null;
-            while (k < text.length) {
-              const ck = text.charAt(k);
-              if (inQ) {
-                if (ck === '\\' && k + 1 < text.length) { k += 2; continue; }
-                if (ck === inQ) inQ = null;
-                k++;
-                continue;
-              }
-              if (ck === '"' || ck === '\'') { inQ = ck; k++; continue; }
-              if (ck === '[') d++;
-              else if (ck === ']') { d--; if (d === 0) break; }
-              k++;
-            }
-            // 光标必须在 [i, k] 之内
-            if (cursor > i && cursor <= k) {
-              return { start: i + 1, end: k };
+          // 找 '@'
+          let k = i - 1;
+          while (k >= 0 && /[a-z_]/i.test(text.charAt(k))) k--;
+          if (k >= 0 && text.charAt(k) === '@') {
+            // 找到匹配的 ']'
+            const end = matchBracket(text, i);
+            if (end >= 0 && cursor > i && cursor <= end) {
+              return {
+                selStart: k,
+                bracketStart: i,
+                bracketEnd: end,
+                inner: text.slice(i + 1, end)
+              };
             }
             return null;
           }
@@ -96,32 +116,69 @@
         }
         depth--;
       }
+
       i--;
     }
     return null;
   }
 
   /**
-   * 解析选择器内部的 key 列表（已输入的键）。
-   * 输入形如 "type=fox,name=Bob,tag=!banned"。
-   * @returns {Array<{ key: string, eqIndex: number }>}
+   * 从 openPos（'[' 位置）找匹配的 ']'。
+   * 返回 ']' 的下标，未闭合返回 -1。
+   */
+  function matchBracket(text, openPos) {
+    let depth = 0;
+    let inQ = null;
+    for (let i = openPos; i < text.length; i++) {
+      const c = text.charAt(i);
+      if (inQ) {
+        if (c === '\\' && i + 1 < text.length) { i++; continue; }
+        if (c === inQ) inQ = null;
+        continue;
+      }
+      if (c === '"' || c === '\'') { inQ = c; continue; }
+      if (c === '[') depth++;
+      else if (c === ']') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  /* ============================================================
+     二、选择器内部：已输入的 key 列表
+     ============================================================ */
+
+  /**
+   * 解析 inner（不含方括号）为 [{key, eqIndex, valueStart, valueEnd}]。
+   * 只在 depth=0（顶层）分割逗号。
    */
   function parseSelectorKeys(inner) {
     const out = [];
     let depth = 0;
     let inQ = null;
     let segStart = 0;
-    const push = function (end) {
+
+    function pushSeg(end) {
       const seg = inner.slice(segStart, end);
       const eq = seg.indexOf('=');
       if (eq >= 0) {
         const key = seg.slice(0, eq).trim();
-        if (key) out.push({ key: key, eqIndex: segStart + eq });
+        out.push({
+          key: key,
+          eqIndex: segStart + eq,
+          valueStart: segStart + eq + 1,
+          valueEnd: end
+        });
       } else {
         const key = seg.trim();
-        if (key) out.push({ key: key, eqIndex: -1 });
+        if (key) {
+          out.push({ key: key, eqIndex: -1, valueStart: -1, valueEnd: -1 });
+        }
       }
-    };
+    }
+
     for (let i = 0; i < inner.length; i++) {
       const c = inner.charAt(i);
       if (inQ) {
@@ -133,29 +190,32 @@
       if (c === '{' || c === '[') depth++;
       else if (c === '}' || c === ']') depth--;
       else if (c === ',' && depth === 0) {
-        push(i);
+        pushSeg(i);
         segStart = i + 1;
       }
     }
-    push(inner.length);
+    pushSeg(inner.length);
     return out;
   }
 
+  /* ============================================================
+     三、选择器内部的位置分析（key / value）
+     ============================================================ */
+
   /**
-   * 判断光标前的字符是否是选择器 key 的位置：
-   *   形如 "@e[ty" 里的 "ty" 是键的前缀
-   *   形如 "@e[type=" 里光标在 '=' 后，是值的位置
+   * @param {string} inner         选择器内部文本（不含方括号）
+   * @param {number} cursorLocal   光标相对 inner 起点的偏移
    * @returns {{
-   *   phase: 'key' | 'value' | 'separator',
+   *   phase: 'key' | 'value',
    *   keyPrefix: string,
-   *   currentKey: string | null
+   *   currentKey: string | null,
+   *   currentSegmentStart: number
    * }}
    */
   function analyzeSelectorPosition(inner, cursorLocal) {
-    // cursorLocal 是相对 inner 的偏移
     const before = inner.slice(0, cursorLocal);
-    // 找当前段（从最后一个 depth-0 逗号后开始）
     let depth = 0, inQ = null, segStart = 0;
+
     for (let i = 0; i < before.length; i++) {
       const c = before.charAt(i);
       if (inQ) {
@@ -168,124 +228,202 @@
       else if (c === '}' || c === ']') depth--;
       else if (c === ',' && depth === 0) segStart = i + 1;
     }
+
     const seg = before.slice(segStart);
     const eq = seg.indexOf('=');
     if (eq < 0) {
-      // 还在键的位置
       return {
         phase: 'key',
         keyPrefix: seg.replace(/^\s+/, ''),
-        currentKey: null
+        currentKey: null,
+        currentSegmentStart: segStart
       };
     }
     return {
       phase: 'value',
       keyPrefix: '',
-      currentKey: seg.slice(0, eq).trim()
+      currentKey: seg.slice(0, eq).trim(),
+      currentSegmentStart: segStart
     };
   }
 
   /* ============================================================
-     参数类型 → 补全来源
+     四、嵌套大括号分析（本次新增核心）
      ============================================================ */
 
-  /** 把 commands.js 里的参数 type 映射到 completer 能识别的"来源"。 */
+  /**
+   * 在 inner 里，找光标所在的最内层 { } 大括号。
+   *
+   * @param {string} inner         选择器内部文本
+   * @param {number} cursorLocal   光标相对 inner 起点的偏移
+   * @returns {null | {
+   *   openBrace,   // '{' 在 inner 中的下标
+   *   closeBrace,  // '}' 在 inner 中的下标
+   *   ownerKey,    // 大括号归属的键（'hasitem' / 'scores' / ...）
+   *   nestText,    // '{' 与 '}' 之间的文本
+   *   nestCursor   // 光标相对 nestText 的偏移
+   * }}
+   */
+  function findNestedContext(inner, cursorLocal) {
+    // 从 cursorLocal 向前找未闭合的 '{'
+    let i = cursorLocal - 1;
+    let depth = 0;
+    let inQ = null;
+
+    while (i >= 0) {
+      const c = inner.charAt(i);
+
+      if (c === '"' || c === '\'') {
+        let bs = 0, j = i - 1;
+        while (j >= 0 && inner.charAt(j) === '\\') { bs++; j--; }
+        if (bs % 2 === 0) {
+          if (inQ === null) inQ = c;
+          else if (inQ === c) inQ = null;
+        }
+        i--;
+        continue;
+      }
+      if (inQ !== null) { i--; continue; }
+
+      if (c === '}') depth++;
+      else if (c === '{') {
+        if (depth === 0) {
+          // 找到最内层未闭合 '{'
+          const close = matchBrace(inner, i);
+          if (close < 0 || cursorLocal > close) return null;
+
+          // 找大括号归属的键：从 '{' 向前跳空白，再跳等号
+          let k = i - 1;
+          while (k >= 0 && /\s/.test(inner.charAt(k))) k--;
+          if (k < 0 || inner.charAt(k) !== '=') return null;
+          k--;
+          while (k >= 0 && /\s/.test(inner.charAt(k))) k--;
+          let keyEnd = k + 1;
+          while (k >= 0 && /[a-zA-Z_]/.test(inner.charAt(k))) k--;
+          const ownerKey = inner.slice(k + 1, keyEnd);
+
+          return {
+            openBrace: i,
+            closeBrace: close,
+            ownerKey: ownerKey,
+            nestText: inner.slice(i + 1, close),
+            nestCursor: cursorLocal - (i + 1)
+          };
+        }
+        depth--;
+      }
+      i--;
+    }
+    return null;
+  }
+
+  /**
+   * 从 openPos（'{' 位置）找匹配的 '}'。
+   */
+  function matchBrace(text, openPos) {
+    let depth = 0, inQ = null;
+    for (let i = openPos; i < text.length; i++) {
+      const c = text.charAt(i);
+      if (inQ) {
+        if (c === '\\' && i + 1 < text.length) { i++; continue; }
+        if (c === inQ) inQ = null;
+        continue;
+      }
+      if (c === '"' || c === '\'') { inQ = c; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * 分析光标在嵌套大括号内的位置（key / value / separator）。
+   * 复用 analyzeSelectorPosition 的算法，但作用域限定在 nestText 上。
+   *
+   * @returns {{
+   *   phase: 'key' | 'value',
+   *   keyPrefix: string,
+   *   currentKey: string | null,
+   *   keys: Array<{key, eqIndex}>
+   * }}
+   */
+  function analyzeNestedPosition(nestText, nestCursor) {
+    const pos = analyzeSelectorPosition(nestText, nestCursor);
+    const keys = parseSelectorKeys(nestText.slice(0, nestCursor));
+    return {
+      phase: pos.phase,
+      keyPrefix: pos.keyPrefix,
+      currentKey: pos.currentKey,
+      keys: keys
+    };
+  }
+
+  /* ============================================================
+     五、参数类型 → 补全来源
+     ============================================================ */
+
   function paramTypeToSource(type) {
     switch (type) {
-      case 'target':     return { types: ['selector', 'player', 'string'], source: 'selector' };
-      case 'block':      return { types: ['block'],   source: 'block' };
-      case 'item':       return { types: ['item'],    source: 'item' };
-      case 'entity':     return { types: ['entity'],  source: 'entity' };
-      case 'effect':     return { types: ['effect'],  source: 'effect' };
-      case 'enchant':    return { types: ['enchant'], source: 'enchant' };
-      case 'gamemode':   return { types: ['gamemode'],source: 'gamemode' };
-      case 'time':       return { types: ['time', 'number'], source: 'time' };
-      case 'dimension':  return { types: ['dimension'], source: 'dimension' };
-      case 'objective':  return { types: ['string'],  source: 'objective' };
-      case 'coordinate': return { types: ['coordinate'], source: null };
-      case 'vec3':       return { types: ['coordinate'], source: null };
-      case 'rotation':   return { types: ['coordinate'], source: null };
-      case 'int':        return { types: ['number'],  source: null };
-      case 'number':     return { types: ['number'],  source: null };
-      case 'string':     return { types: ['string'],  source: null };
-      case 'quoted':     return { types: ['string'],  source: null };
-      case 'message':    return { types: ['string'],  source: null };
-      case 'bool':       return { types: ['bool'],    source: null };
-      case 'json':       return { types: ['json'],    source: null };
-      case 'command':    return { types: ['command'], source: 'command' };
-      case 'commandName':return { types: ['command'], source: 'command' };
-      case 'enum':       return { types: ['enum'],    source: 'enum' };
-      default:           return { types: ['value'],   source: null };
+      case 'target':      return { types: ['selector', 'player', 'string'], source: 'selector' };
+      case 'block':       return { types: ['block'],   source: 'block' };
+      case 'item':        return { types: ['item'],    source: 'item' };
+      case 'entity':      return { types: ['entity'],  source: 'entity' };
+      case 'effect':      return { types: ['effect'],  source: 'effect' };
+      case 'enchant':     return { types: ['enchant'], source: 'enchant' };
+      case 'gamemode':    return { types: ['gamemode'],source: 'gamemode' };
+      case 'time':        return { types: ['time', 'number'], source: 'time' };
+      case 'dimension':   return { types: ['dimension'], source: 'dimension' };
+      case 'objective':   return { types: ['string'],  source: 'objective' };
+      case 'coordinate':  return { types: ['coordinate'], source: null };
+      case 'vec3':        return { types: ['coordinate'], source: null };
+      case 'rotation':    return { types: ['coordinate'], source: null };
+      case 'int':         return { types: ['number'],  source: null };
+      case 'number':      return { types: ['number'],  source: null };
+      case 'string':      return { types: ['string'],  source: null };
+      case 'quoted':      return { types: ['string'],  source: null };
+      case 'message':     return { types: ['string'],  source: null };
+      case 'bool':        return { types: ['bool'],    source: null };
+      case 'json':        return { types: ['json'],    source: null };
+      case 'command':     return { types: ['command'], source: 'command' };
+      case 'commandName': return { types: ['command'], source: 'command' };
+      case 'enum':        return { types: ['enum'],    source: 'enum' };
+      default:            return { types: ['value'],   source: null };
     }
   }
 
   /* ============================================================
-     execute 链：解析当前处于哪个 link
+     六、execute 链
      ============================================================ */
 
-  /**
-   * 给定 execute 后面的参数 token 列表（已去掉 'execute' 本身），
-   * 推算当前"已消耗到第几个 link 的第几个 param"。
-   *
-   * @param {Array} args    有效 token（不含 whitespace/newline）
-   * @param {number} cursorLocalInArgs  光标相对 args 起点的位置（用于判断"光标是否在最后一个词之后"）
-   * @param {Array} links   commands.js 里 execute.chain.links
-   * @returns {{
-   *   linkIndex: number,        // 已完成多少个 link
-   *   currentLink: Object|null, // 当前正在填的 link
-   *   paramIndex: number,       // 在当前 link 内第几个 param
-   *   expecting: Object|null
-   * }}
-   */
   function parseExecuteChain(args, cursorLocalInArgs, links) {
-    let li = 0;         // links 下标
-    let pi = 0;         // 当前 link 内 param 下标
-    let i = 0;          // args 下标
-    let currentLink = null;
+    let li = 0, pi = 0, i = 0, currentLink = null;
 
     while (i < args.length) {
       if (li >= links.length) {
-        // 超过已知 link，无法继续
-        return {
-          linkIndex: li,
-          currentLink: null,
-          paramIndex: pi,
-          expecting: null
-        };
+        return { linkIndex: li, currentLink: null, paramIndex: pi, expecting: null };
       }
-
       const link = links[li];
       currentLink = link;
 
-      // 第一个 token 应该是 keyword（除非 link.keyword 是复合的，如 "positioned as"）
       const kwTokens = link.keyword.split(/\s+/);
-      let matchedKeyword = true;
+      let matched = true;
       for (let k = 0; k < kwTokens.length; k++) {
-        if (i + k >= args.length) { matchedKeyword = false; break; }
-        if (args[i + k].value !== kwTokens[k]) { matchedKeyword = false; break; }
+        if (i + k >= args.length) { matched = false; break; }
+        if (args[i + k].value !== kwTokens[k]) { matched = false; break; }
       }
-
-      if (!matchedKeyword) {
-        // 这个 link 不匹配，尝试下一个 link
-        // 但如果是当前用户输入到一半的 keyword，也应该能给出候选
-        // 简化处理：跳过这个 link，试下一个
+      if (!matched) {
         li++;
-        // 关键：如果所有 link 都试过仍不匹配，跳出
         if (li >= links.length) {
-          return {
-            linkIndex: li,
-            currentLink: null,
-            paramIndex: 0,
-            expecting: null
-          };
+          return { linkIndex: li, currentLink: null, paramIndex: 0, expecting: null };
         }
         continue;
       }
 
-      // 消耗 keyword
       i += kwTokens.length;
 
-      // 如果 link 是 terminal（run），把剩下的当命令处理
       if (link.terminal) {
         return {
           linkIndex: li,
@@ -295,23 +433,14 @@
         };
       }
 
-      // 若 link 有 expand（if / unless），转交给 expand 逻辑
       if (link.expand) {
-        return parseExpand(link.expand, args, i, cursorLocalInArgs);
+        return parseExpand(link.expand, args, i);
       }
 
-      // 消耗 params
       const params = link.params || [];
       pi = 0;
-      while (pi < params.length && i < args.length) {
-        const p = params[pi];
-        // 粗略判断：这个 token 是否已经被填上
-        // 精确判断需要类型校验，这里简化为「只要有 token 就消耗一个」
-        i++;
-        pi++;
-      }
+      while (pi < params.length && i < args.length) { i++; pi++; }
 
-      // 若当前 link 参数未填完，返回
       if (pi < params.length) {
         return {
           linkIndex: li,
@@ -320,20 +449,12 @@
           expecting: paramTypeToSource(params[pi].type)
         };
       }
-
-      // 填完则进入下一个 link
       li++;
       pi = 0;
     }
 
-    // args 用完了：光标在下一个待填位置
     if (li >= links.length) {
-      return {
-        linkIndex: li,
-        currentLink: null,
-        paramIndex: 0,
-        expecting: null
-      };
+      return { linkIndex: li, currentLink: null, paramIndex: 0, expecting: null };
     }
     const nextLink = links[li];
     if (nextLink.terminal) {
@@ -344,27 +465,18 @@
         expecting: { types: ['command'], source: 'command' }
       };
     }
-    // 还没输入 keyword，期待 keyword
     return {
       linkIndex: li,
       currentLink: nextLink,
-      paramIndex: -1,     // -1 表示期待 keyword
+      paramIndex: -1,
       expecting: { types: ['executeKeyword'], source: 'executeKeyword' }
     };
   }
 
-  /**
-   * 处理 execute 里 if / unless 展开。
-   * expand = { name: 'condition', options: [{value, params}, ...] }
-   * 已消耗到 args[i]（i 指向 expand 的第一个 token）
-   */
-  function parseExpand(expand, args, i, cursorLocalInArgs) {
+  function parseExpand(expand, args, i) {
     if (i >= args.length) {
-      // 期待条件类型（block/blocks/entity/score/data）
       return {
-        linkIndex: -1,
-        currentLink: null,
-        paramIndex: 0,
+        linkIndex: -1, currentLink: null, paramIndex: 0,
         expecting: {
           types: ['conditionType'],
           source: 'conditionType',
@@ -376,9 +488,7 @@
     const opt = expand.options.find(function (o) { return o.value === cond; });
     if (!opt) {
       return {
-        linkIndex: -1,
-        currentLink: null,
-        paramIndex: 0,
+        linkIndex: -1, currentLink: null, paramIndex: 0,
         expecting: {
           types: ['conditionType'],
           source: 'conditionType',
@@ -387,42 +497,29 @@
       };
     }
     i++;
-    // 消耗 opt.params
     const params = opt.params || [];
     let pi = 0;
-    while (pi < params.length && i < args.length) {
-      i++;
-      pi++;
-    }
+    while (pi < params.length && i < args.length) { i++; pi++; }
     if (pi < params.length) {
       return {
-        linkIndex: -1,
-        currentLink: null,
-        paramIndex: pi,
+        linkIndex: -1, currentLink: null, paramIndex: pi,
         expecting: paramTypeToSource(params[pi].type)
       };
     }
-    // 条件填完，期待 run
     return {
-      linkIndex: -1,
-      currentLink: null,
-      paramIndex: 0,
+      linkIndex: -1, currentLink: null, paramIndex: 0,
       expecting: { types: ['executeKeyword'], source: 'executeKeyword' }
     };
   }
 
   /* ============================================================
-     主入口
+     七、主入口
      ============================================================ */
 
-  /**
-   * @param {string} text    完整文本
-   * @param {number} cursor  光标 offset
-   * @returns {Object}       上下文对象
-   */
   function parseAt(text, cursor) {
     const tk = getTokenizer();
     const cmds = getCommands();
+    const sel = getSelector();
 
     const empty = {
       kind: 'none',
@@ -437,6 +534,12 @@
       wordEnd: cursor,
       inSelector: false,
       selectorKeys: [],
+
+      nestedPath: null,
+      nestedPhase: null,
+      nestedKeys: [],
+      nestedKey: null,
+
       errors: []
     };
 
@@ -445,18 +548,66 @@
     const tokens = tk.tokenize(text || '');
     const wordInfo = tk.wordAt(text || '', cursor);
 
-    // 检查是否在选择器内部
+    /* ---------- 1. 选择器内部？ ---------- */
     const selCtx = findSelectorContext(text || '', cursor);
     if (selCtx) {
-      const inner = (text || '').slice(selCtx.start, selCtx.end);
-      const innerCursor = cursor - selCtx.start;
+      const inner = selCtx.inner;
+      const innerCursor = cursor - (selCtx.bracketStart + 1);
+
+      // 先看是否有嵌套大括号
+      const nestCtx = findNestedContext(inner, innerCursor);
+      if (nestCtx) {
+        const nested = analyzeNestedPosition(nestCtx.nestText, nestCtx.nestCursor);
+
+        // 组合返回
+        const nestedPhase = nested.phase; // 'key' | 'value'
+        const nestedKeys = nested.keys;
+        const nestedKey = nested.currentKey;
+
+        const kind = nestedPhase === 'key'
+          ? 'selectorNestedKey'
+          : 'selectorNestedValue';
+
+        // expecting 的具体内容由 completer 决定；
+        // 这里只提供路径、阶段、当前嵌套键
+        const expecting = {
+          types: [kind],
+          source: 'selectorNested',
+          nestedPath: [nestCtx.ownerKey],
+          nestedPhase: nestedPhase,
+          nestedKey: nestedKey,
+          // 供 completer 查找嵌套键定义
+          nestedOwner: nestCtx.ownerKey
+        };
+
+        return Object.assign({}, empty, {
+          kind: kind,
+          expecting: expecting,
+          partial: nestedPhase === 'key' ? nested.keyPrefix : '',
+          tokens: tokens,
+          wordStart: wordInfo.start,
+          wordEnd: wordInfo.end,
+          inSelector: true,
+          selectorKeys: parseSelectorKeys(inner),
+          nestedPath: [nestCtx.ownerKey],
+          nestedPhase: nestedPhase,
+          nestedKeys: nestedKeys,
+          nestedKey: nestedKey
+        });
+      }
+
+      // 没嵌套：走原有的 selectorKey / selectorValue
       const pos = analyzeSelectorPosition(inner, innerCursor);
       const keys = parseSelectorKeys(inner.slice(0, innerCursor));
+
+      const kKind = pos.phase === 'key' ? 'selectorKey' : 'selectorValue';
+      const kExpecting = pos.phase === 'key'
+        ? { types: ['selectorKey'], source: 'selectorKey' }
+        : { types: ['selectorValue'], source: 'selectorValue', key: pos.currentKey };
+
       return Object.assign({}, empty, {
-        kind: pos.phase === 'key' ? 'selectorKey' : 'selectorValue',
-        expecting: pos.phase === 'key'
-          ? { types: ['selectorKey'], source: 'selectorKey' }
-          : { types: ['selectorValue'], source: 'selectorValue', key: pos.currentKey },
+        kind: kKind,
+        expecting: kExpecting,
         partial: pos.phase === 'key' ? pos.keyPrefix : '',
         tokens: tokens,
         wordStart: wordInfo.start,
@@ -466,7 +617,7 @@
       });
     }
 
-    // 取当前光标之前的有效 token（不含光标后的）
+    /* ---------- 2. 收集光标前的有效 token ---------- */
     const beforeTokens = [];
     for (let i = 0; i < tokens.length; i++) {
       const t = tokens[i];
@@ -475,22 +626,15 @@
       beforeTokens.push(t);
     }
 
-    // 若光标位于某个 token 中间，把它算作 partial 前缀
-    // 我们只关心"当前正在输入的词"是否包含光标
     const partial = wordInfo.prefix;
 
-    // 判定第一个有效 token 是否命令名
-    // 若用户只输了 "/"，则 beforeTokens 为空，期待命令名
     let firstToken = null;
     if (beforeTokens.length > 0 && beforeTokens[0].type === 'slash') {
       firstToken = beforeTokens[1] || null;
-      // 命令名前可能有斜杠 token
     } else {
       firstToken = beforeTokens[0] || null;
     }
 
-    // 若 firstToken 存在且其 start >= cursor - partial.length，
-    // 说明光标还在命令名本身（打字中）
     if (!firstToken) {
       return Object.assign({}, empty, {
         kind: 'command',
@@ -506,7 +650,6 @@
     const cmdName = firstToken.value;
     const cmdDef = cmds.get(cmdName);
 
-    // 用户还在打命令名
     if (!cmdDef) {
       return Object.assign({}, empty, {
         kind: 'command',
@@ -519,24 +662,20 @@
       });
     }
 
-    /* ---------- 特殊：execute 链式命令 ---------- */
+    /* ---------- 3. execute 链 ---------- */
     if (cmdDef.type === 'chain' && cmdDef.chain) {
-      // args = firstToken 之后的所有有效 token
       const args = [];
       for (let i = 0; i < beforeTokens.length; i++) {
-        const t = beforeTokens[i];
-        if (t === firstToken) {
+        if (beforeTokens[i] === firstToken) {
           for (let j = i + 1; j < beforeTokens.length; j++) args.push(beforeTokens[j]);
           break;
         }
       }
-      // 判断光标是否紧贴最后一个词之后（还没打出空格）
       const trailingSpace = /[\s]$/.test((text || '').slice(0, cursor));
       const cursorLocalInArgs = trailingSpace ? Number.MAX_SAFE_INTEGER : args.length - 1;
 
       const chainResult = parseExecuteChain(args, cursorLocalInArgs, cmdDef.chain.links);
 
-      // 若期待 keyword，返回 type = 'executeKeyword'
       return Object.assign({}, empty, {
         kind: chainResult.expecting && chainResult.expecting.source === 'executeKeyword'
           ? 'keyword'
@@ -553,11 +692,8 @@
       });
     }
 
-    /* ---------- 普通命令：逐参数消耗 ---------- */
-    // 找到第一个 syntax 分支能匹配"已消耗参数个数 <= 已输入参数个数"的
-    const argTokens = beforeTokens.slice(
-      beforeTokens.indexOf(firstToken) + 1
-    );
+    /* ---------- 4. 普通命令 ---------- */
+    const argTokens = beforeTokens.slice(beforeTokens.indexOf(firstToken) + 1);
     const trailingSpace = /[\s]$/.test((text || '').slice(0, cursor));
     const consumed = trailingSpace ? argTokens.length : Math.max(0, argTokens.length - 1);
 
@@ -576,7 +712,6 @@
 
     const params = branch.params || [];
     if (consumed >= params.length) {
-      // 参数已填满，无期待
       return Object.assign({}, empty, {
         kind: 'arg',
         commandName: cmdName,
@@ -592,13 +727,9 @@
 
     const p = params[consumed];
     const exp = paramTypeToSource(p.type);
-
-    // 若参数是 enum，把 options 也塞进 expecting
     if (p.type === 'enum' && Array.isArray(p.options)) {
       exp.options = p.options;
     }
-
-    // 若参数有 group 或 min/max 等元信息，一并传出
     if (p.group) exp.group = p.group;
     if (p.min != null) exp.min = p.min;
     if (p.max != null) exp.max = p.max;
@@ -616,11 +747,6 @@
     });
   }
 
-  /**
-   * 选择最合适的 syntax 分支。
-   * 目前策略：找到第一个 consumed <= params.length 的分支。
-   * 后续可以基于 token 类型做更精细的选择。
-   */
   function pickSyntaxBranch(cmdDef, consumed) {
     if (!cmdDef.syntax || cmdDef.syntax.length === 0) return null;
     for (let i = 0; i < cmdDef.syntax.length; i++) {
@@ -629,7 +755,6 @@
       const max = (b.params || []).length;
       if (consumed >= min && consumed <= max) return b;
     }
-    // 兜底：返回第一个
     return cmdDef.syntax[0];
   }
 
@@ -641,9 +766,13 @@
   global.MCCT.parser = {
     parseAt: parseAt,
     findSelectorContext: findSelectorContext,
+    findNestedContext: findNestedContext,
     analyzeSelectorPosition: analyzeSelectorPosition,
+    analyzeNestedPosition: analyzeNestedPosition,
     parseSelectorKeys: parseSelectorKeys,
     paramTypeToSource: paramTypeToSource,
+    matchBracket: matchBracket,
+    matchBrace: matchBrace,
     _pickSyntaxBranch: pickSyntaxBranch
   };
 })(window);
